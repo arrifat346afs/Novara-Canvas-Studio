@@ -17,6 +17,7 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/version.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/hwcontext.h>
@@ -53,6 +54,17 @@ namespace {
 
 constexpr std::chrono::milliseconds kPreviewPushInterval{33};
 
+#if defined(LIBAVCODEC_VERSION_INT) && LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+#define CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG 1
+#else
+#define CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG 0
+#endif
+
+#if !CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 void apply_codec_extra(AVCodecContext* ctx, const std::string& extra) {
     std::istringstream iss(extra);
     std::string line;
@@ -71,6 +83,7 @@ void apply_codec_extra(AVCodecContext* ctx, const std::string& extra) {
 
 AVPixelFormat pick_video_fmt(const AVCodec* codec, bool* uses_hw) {
     *uses_hw = false;
+#if CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG
     const enum AVPixelFormat* fmts = nullptr;
     int n = 0;
     if (avcodec_get_supported_config(NULL, codec, AV_CODEC_CONFIG_PIX_FORMAT,
@@ -91,6 +104,24 @@ AVPixelFormat pick_video_fmt(const AVCodec* codec, bool* uses_hw) {
         if (*uses_hw) return hw;
         if (sw != AV_PIX_FMT_NONE) return sw;
     }
+#else
+    if (codec != nullptr && codec->pix_fmts != nullptr) {
+        AVPixelFormat hw = AV_PIX_FMT_NONE;
+        AVPixelFormat sw = AV_PIX_FMT_NONE;
+        for (const enum AVPixelFormat* p = codec->pix_fmts; *p != AV_PIX_FMT_NONE; ++p) {
+            const AVPixelFormat f = *p;
+            if (f == AV_PIX_FMT_CUDA || f == AV_PIX_FMT_VAAPI || f == AV_PIX_FMT_QSV ||
+                f == AV_PIX_FMT_DRM_PRIME || f == AV_PIX_FMT_D3D11) {
+                *uses_hw = true;
+                if (hw == AV_PIX_FMT_NONE) hw = f;
+            } else if (f == AV_PIX_FMT_NV12 || f == AV_PIX_FMT_YUV420P) {
+                if (sw == AV_PIX_FMT_NONE) sw = f;
+            }
+        }
+        if (*uses_hw) return hw;
+        if (sw != AV_PIX_FMT_NONE) return sw;
+    }
+#endif
     return AV_PIX_FMT_YUV420P;
 }
 
@@ -139,6 +170,7 @@ bool audio_encoder_is_lossless(const std::string& encoder_name) {
 }
 
 AVSampleFormat pick_audio_sample_fmt(const AVCodec* acodec) {
+#if CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG
     const void* configs = nullptr;
     int nb = 0;
     if (avcodec_get_supported_config(nullptr, acodec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0,
@@ -155,9 +187,23 @@ AVSampleFormat pick_audio_sample_fmt(const AVCodec* acodec) {
         for (int i = 0; i < nb; ++i)
             if (fmts[i] == want) return want;
     return fmts[0];
+#else
+    const enum AVSampleFormat* fmts = (acodec != nullptr) ? acodec->sample_fmts : nullptr;
+    if (fmts == nullptr) return AV_SAMPLE_FMT_FLTP;
+    const AVSampleFormat kPref[] = {
+        AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_S32P, AV_SAMPLE_FMT_S32,
+        AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S64P, AV_SAMPLE_FMT_S64,
+        AV_SAMPLE_FMT_DBLP, AV_SAMPLE_FMT_DBL, AV_SAMPLE_FMT_U8P, AV_SAMPLE_FMT_U8,
+    };
+    for (AVSampleFormat want : kPref)
+        for (const enum AVSampleFormat* p = fmts; *p != AV_SAMPLE_FMT_NONE; ++p)
+            if (*p == want) return want;
+    return fmts[0];
+#endif
 }
 
 bool audio_sample_rate_supported(const AVCodec* acodec, int rate) {
+#if CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG
     const void* configs = nullptr;
     int nb = 0;
     if (avcodec_get_supported_config(nullptr, acodec, AV_CODEC_CONFIG_SAMPLE_RATE, 0,
@@ -168,7 +214,18 @@ bool audio_sample_rate_supported(const AVCodec* acodec, int rate) {
     for (int i = 0; i < nb; ++i)
         if (rates[i] == rate) return true;
     return false;
+#else
+    const int* rates = (acodec != nullptr) ? acodec->supported_samplerates : nullptr;
+    if (rates == nullptr) return true;
+    for (const int* p = rates; *p != 0; ++p)
+        if (*p == rate) return true;
+    return false;
+#endif
 }
+
+#if !CANVAS_HAVE_AVCODEC_SUPPORTED_CONFIG
+#pragma GCC diagnostic pop
+#endif
 
 float clamp_unit(float v) {
     if (v < -1.0f) return -1.0f;
