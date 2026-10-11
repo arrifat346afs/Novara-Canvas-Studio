@@ -1,23 +1,18 @@
 #include "vk_probe.hpp"
+#include "vk_video_compat.hpp"
 
 #include <vulkan/vulkan.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 using namespace canvas::vktest;
 
 namespace {
 
-constexpr std::uint32_t kDecodeOps =
-    VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR |
-    VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR |
-    VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR |
-    VK_VIDEO_CODEC_OPERATION_DECODE_VP9_BIT_KHR;
-constexpr std::uint32_t kEncodeOps =
-    VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR |
-    VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR |
-    VK_VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR;
+constexpr std::uint32_t kDecodeOps = kAllDecodeOps;
+constexpr std::uint32_t kEncodeOps = kAllEncodeOps;
 
 int g_failures = 0;
 
@@ -27,21 +22,17 @@ void check(bool ok, const char* what) {
 }
 
 const char* decode_name(std::uint32_t op) {
-    switch (op) {
-        case VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR: return "h264-decode";
-        case VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR: return "h265-decode";
-        case VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR: return "av1-decode";
-        case VK_VIDEO_CODEC_OPERATION_DECODE_VP9_BIT_KHR: return "vp9-decode";
-        default: return "?";
-    }
+    if (op == VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) return "h264-decode";
+    if (op == VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) return "h265-decode";
+    if (kDecodeAv1Op != 0 && op == kDecodeAv1Op) return "av1-decode";
+    if (kDecodeVp9Op != 0 && op == kDecodeVp9Op) return "vp9-decode";
+    return "?";
 }
 const char* encode_name(std::uint32_t op) {
-    switch (op) {
-        case VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR: return "h264-encode";
-        case VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR: return "h265-encode";
-        case VK_VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR: return "av1-encode";
-        default: return "?";
-    }
+    if (op == VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR) return "h264-encode";
+    if (op == VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR) return "h265-encode";
+    if (kEncodeAv1Op != 0 && op == kEncodeAv1Op) return "av1-encode";
+    return "?";
 }
 
 }
@@ -64,16 +55,24 @@ int main() {
                         q.video_encode ? "yes" : "no",
                         q.graphics ? "yes" : "no",
                         q.compute ? "yes" : "no");
-            for (std::uint32_t op : {VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR,
-                                     VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR,
-                                     VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR,
-                                     VK_VIDEO_CODEC_OPERATION_DECODE_VP9_BIT_KHR}) {
+            const std::uint32_t kDecodeList[] = {
+                VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR,
+                VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR,
+                kDecodeAv1Op,
+                kDecodeVp9Op,
+            };
+            for (std::uint32_t op : kDecodeList) {
+                if (op == 0) continue;
                 if ((q.video_codec_operations & op) != 0)
                     std::printf("      %s\n", decode_name(op));
             }
-            for (std::uint32_t op : {VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR,
-                                     VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR,
-                                     VK_VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR}) {
+            const std::uint32_t kEncodeList[] = {
+                VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR,
+                VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR,
+                kEncodeAv1Op,
+            };
+            for (std::uint32_t op : kEncodeList) {
+                if (op == 0) continue;
                 if ((q.video_codec_operations & op) != 0)
                     std::printf("      %s\n", encode_name(op));
             }

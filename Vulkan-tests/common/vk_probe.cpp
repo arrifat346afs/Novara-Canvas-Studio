@@ -1,4 +1,5 @@
 #include "vk_probe.hpp"
+#include "vk_video_compat.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -121,15 +122,9 @@ ProbeResult run_probe() {
             QueueFamilyInfo q;
             q.index = i;
             q.flags = families[i].queueFamilyProperties.queueFlags;
-            q.video_decode = (video[i].videoCodecOperations &
-                              (VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR |
-                               VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR |
-                               VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR |
-                               VK_VIDEO_CODEC_OPERATION_DECODE_VP9_BIT_KHR)) != 0;
-            q.video_encode = (video[i].videoCodecOperations &
-                              (VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR |
-                               VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR |
-                               VK_VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR)) != 0;
+            q.video_codec_operations = video[i].videoCodecOperations;
+            q.video_decode = (video[i].videoCodecOperations & kAllDecodeOps) != 0;
+            q.video_encode = (video[i].videoCodecOperations & kAllEncodeOps) != 0;
             q.graphics = (families[i].queueFamilyProperties.queueFlags &
                           VK_QUEUE_GRAPHICS_BIT) != 0;
             q.compute = (families[i].queueFamilyProperties.queueFlags &

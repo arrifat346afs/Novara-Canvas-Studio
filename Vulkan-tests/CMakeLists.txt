@@ -3,6 +3,7 @@ get_filename_component(CANVAS_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../core/incl
 add_library(canvas_vk_probe STATIC
     common/vk_probe.hpp
     common/vk_probe.cpp
+    common/vk_video_compat.hpp
 )
 target_include_directories(canvas_vk_probe PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/common

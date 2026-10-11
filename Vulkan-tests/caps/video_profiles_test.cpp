@@ -1,4 +1,5 @@
 #include "vk_probe.hpp"
+#include "vk_video_compat.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -20,11 +21,17 @@ struct ProfileQuery {
     VkVideoProfileInfoKHR profile{};
     VkVideoDecodeH264ProfileInfoKHR dec_h264{};
     VkVideoDecodeH265ProfileInfoKHR dec_h265{};
+#ifdef VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME
     VkVideoDecodeAV1ProfileInfoKHR dec_av1{};
+#endif
+#ifdef VK_KHR_VIDEO_DECODE_VP9_EXTENSION_NAME
     VkVideoDecodeVP9ProfileInfoKHR dec_vp9{};
+#endif
     VkVideoEncodeH264ProfileInfoKHR enc_h264{};
     VkVideoEncodeH265ProfileInfoKHR enc_h265{};
+#ifdef VK_KHR_VIDEO_ENCODE_AV1_EXTENSION_NAME
     VkVideoEncodeAV1ProfileInfoKHR enc_av1{};
+#endif
 };
 
 ProfileQuery make_query(const char* name, bool decode,
@@ -101,9 +108,10 @@ int main() {
         q.profile.pNext = &q.dec_h265;
         queries.push_back(q);
     }
+#ifdef VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME
     {
         ProfileQuery q = make_query("av1-decode-main", true,
-                                    VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR,
+                                    static_cast<VkVideoCodecOperationFlagBitsKHR>(kDecodeAv1Op),
                                     VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR);
         q.dec_av1.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PROFILE_INFO_KHR;
         q.dec_av1.stdProfile = STD_VIDEO_AV1_PROFILE_MAIN;
@@ -111,15 +119,18 @@ int main() {
         q.profile.pNext = &q.dec_av1;
         queries.push_back(q);
     }
+#endif
+#ifdef VK_KHR_VIDEO_DECODE_VP9_EXTENSION_NAME
     {
         ProfileQuery q = make_query("vp9-decode-profile0", true,
-                                    VK_VIDEO_CODEC_OPERATION_DECODE_VP9_BIT_KHR,
+                                    static_cast<VkVideoCodecOperationFlagBitsKHR>(kDecodeVp9Op),
                                     VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR);
         q.dec_vp9.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PROFILE_INFO_KHR;
         q.dec_vp9.stdProfile = STD_VIDEO_VP9_PROFILE_0;
         q.profile.pNext = &q.dec_vp9;
         queries.push_back(q);
     }
+#endif
     {
         ProfileQuery q = make_query("h264-encode-main", false,
                                     VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR,
@@ -138,15 +149,17 @@ int main() {
         q.profile.pNext = &q.enc_h265;
         queries.push_back(q);
     }
+#ifdef VK_KHR_VIDEO_ENCODE_AV1_EXTENSION_NAME
     {
         ProfileQuery q = make_query("av1-encode-main", false,
-                                    VK_VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR,
+                                    static_cast<VkVideoCodecOperationFlagBitsKHR>(kEncodeAv1Op),
                                     VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR);
         q.enc_av1.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_PROFILE_INFO_KHR;
         q.enc_av1.stdProfile = STD_VIDEO_AV1_PROFILE_MAIN;
         q.profile.pNext = &q.enc_av1;
         queries.push_back(q);
     }
+#endif
 
     std::uint32_t ext_n = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &ext_n, nullptr);
@@ -165,13 +178,22 @@ int main() {
         inst_exts.push_back(VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME);
     if (has_ext(VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME))
         inst_exts.push_back(VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME);
-    for (const char* name : {VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
-                             VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
-                             VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME,
-                             VK_KHR_VIDEO_DECODE_VP9_EXTENSION_NAME,
-                             VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
-                             VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME,
-                             VK_KHR_VIDEO_ENCODE_AV1_EXTENSION_NAME}) {
+    const char* const kCodecExts[] = {
+        VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
+        VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
+#ifdef VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME
+        VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_VIDEO_DECODE_VP9_EXTENSION_NAME
+        VK_KHR_VIDEO_DECODE_VP9_EXTENSION_NAME,
+#endif
+        VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
+        VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME,
+#ifdef VK_KHR_VIDEO_ENCODE_AV1_EXTENSION_NAME
+        VK_KHR_VIDEO_ENCODE_AV1_EXTENSION_NAME,
+#endif
+    };
+    for (const char* name : kCodecExts) {
         if (has_ext(name)) inst_exts.push_back(name);
     }
 
