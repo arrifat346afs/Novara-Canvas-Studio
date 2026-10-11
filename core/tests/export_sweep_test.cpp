@@ -147,7 +147,7 @@ static bool is_valid_combo(const std::string& fmt, const std::string& codec) {
 
 int main() {
     std::string src = std::string(kOutDir) + "/src.mp4";
-    std::system(("mkdir -p " + std::string(kOutDir)).c_str());
+    if (std::system(("mkdir -p " + std::string(kOutDir)).c_str()) != 0) return 2;
     if (!make_source(src, 128, 96, 30, 12)) return 2;
 
     const std::vector<std::string> formats{"mp4", "matroska", "mxf_op1a", "mpeg", "webm"};

@@ -121,7 +121,7 @@ int main() {
 #ifdef CANVAS_HAVE_CUDA
     const std::string out_dir = "/tmp/canvas_vram_leak";
     const std::string src = out_dir + "/src.mp4";
-    std::system(("mkdir -p " + out_dir + " && rm -f " + src).c_str());
+    if (std::system(("mkdir -p " + out_dir + " && rm -f " + src).c_str()) != 0) return 2;
     std::printf("vram_leak: 2K1440p source frames=%d gop=%d\n", kFrames, kGopFrames);
     if (!make_source(src, kW, kH, kFps, kFrames, kGopFrames)) return 2;
 

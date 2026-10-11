@@ -125,7 +125,8 @@ static constexpr double kSeqFloorMs = 1000.0 / 60.0;
 
 int main() {
     std::string src = std::string(kOutDir) + "/sparse.mp4";
-    std::system(("mkdir -p " + std::string(kOutDir) + " && rm -f " + src).c_str());
+    if (std::system(("mkdir -p " + std::string(kOutDir) + " && rm -f " + src).c_str()) != 0)
+        return 2;
     if (!make_source(src, 1280, 720, kFps, kFrames, kGopFrames)) return 2;
 
     std::printf("scrub_bench: sparse-GOP source frames=%d gop=%d (~%.1fs) preview_dim=%d\n",
