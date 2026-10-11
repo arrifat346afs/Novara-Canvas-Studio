@@ -1,5 +1,5 @@
 name: Build Linux Packages
-# This workflow builds DEB, RPM, and Arch packages for the Novara Canvas Studio project.
+
 on:
   push:
     branches:
@@ -19,7 +19,7 @@ jobs:
       image: ubuntu:24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -28,31 +28,32 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -qq
           apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build meson pkg-config git \
-            qt6-base-dev libqt6svg6-dev \
+            ca-certificates git build-essential cmake ninja-build meson pkg-config \
+            qt6-base-dev qt6-svg-dev libqt6svg6-dev \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev \
             libpipewire-0.3-dev libasound2-dev nlohmann-json3-dev \
             libva-dev libglvnd-dev libvulkan-dev
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build project
         run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-          cmake --build . -j$(nproc)
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
 
       - name: Install to staging directory
         run: |
           mkdir -p staging/usr
-          cd build
-          cmake --install . --prefix ../staging/usr --strip
+          cmake --install build --prefix "$PWD/staging/usr" --strip
 
       - name: Create DEB package structure
         run: |
-          mkdir -p deb-build/DEBIAN
+          set -e
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
           VERSION=${VERSION#v}
-          
+          mkdir -p deb-build/DEBIAN
+          mkdir -p deb-build/usr
+          cp -a staging/usr/. deb-build/usr/
+
           cat > deb-build/DEBIAN/control <<EOF
           Package: canvas
           Version: ${VERSION}
@@ -60,33 +61,31 @@ jobs:
           Maintainer: Event Horizon Desktop Environment <dev@example.com>
           Homepage: https://github.com/Event-Horizon-desktop-environment/Novara-Canvas-Studio
           Description: Novara Canvas Studio - Nonlinear Video Editor
-           A powerful, pro-grade nonlinear video editor with a dark, editor-grade UI.
-           Features GPU acceleration, real-time playback, and professional-grade effects.
+          A powerful, pro-grade nonlinear video editor with a dark, editor-grade UI.
+          Features GPU acceleration, real-time playback, and professional-grade effects.
           Depends: libqt6core6, libqt6gui6, libavformat60, libavcodec60, libpipewire-0.3-0, libasound2
           EOF
 
-          cat > deb-build/DEBIAN/postinst <<EOF
+          cat > deb-build/DEBIAN/postinst <<'EOF'
           #!/bin/bash
           set -e
-          if command -v update-desktop-database >/dev/null; then
+          if command -v update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications 2>/dev/null || true
           fi
-          if command -v update-mime-database >/dev/null; then
+          if command -v update-mime-database >/dev/null 2>&1; then
             update-mime-database /usr/share/mime 2>/dev/null || true
           fi
           EOF
 
           chmod 0755 deb-build/DEBIAN/postinst
-          
-          cp -r staging/usr deb-build/
 
       - name: Build DEB package
         run: |
-          dpkg-deb --build deb-build canvas_*.deb
-          mv canvas_*.deb canvas-$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")_amd64.deb || true
+          dpkg-deb --build deb-build "canvas_${VERSION}_amd64.deb"
+          mv "canvas_${VERSION}_amd64.deb" "canvas-$(git describe --tags --always --dirty 2>/dev/null || echo 0.1.0)_amd64.deb"
 
       - name: Upload DEB artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: canvas-deb
           path: "*.deb"
@@ -99,36 +98,34 @@ jobs:
       image: fedora:41
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install build dependencies
         run: |
           dnf install -y \
-            cmake ninja-build meson gcc-c++ pkgconf git \
+            ca-certificates git cmake ninja-build meson gcc-c++ pkgconf \
             qt6-qtbase-devel qt6-qtsvg-devel \
             ffmpeg-free-devel libva-devel libglvnd-devel pipewire-devel alsa-lib-devel \
             nlohmann-json-devel vulkan-headers rpm-build
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build project
         run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-          cmake --build . -j$(nproc)
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
 
       - name: Install to staging directory
         run: |
           mkdir -p staging/usr
-          cd build
-          cmake --install . --prefix ../staging/usr --strip
+          cmake --install build --prefix "$PWD/staging/usr" --strip
 
       - name: Create RPM spec file
         run: |
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
           VERSION=${VERSION#v}
-          
+
           cat > canvas.spec <<EOF
           Name:           canvas
           Version:        ${VERSION}
@@ -137,18 +134,18 @@ jobs:
           License:        MIT
           URL:            https://github.com/Event-Horizon-desktop-environment/Novara-Canvas-Studio
           BuildArch:      x86_64
-          
+
           %description
           A powerful, pro-grade nonlinear video editor with a dark, editor-grade UI.
           Features GPU acceleration, real-time playback, and professional-grade effects.
-          
+
           %install
           cp -r staging/usr %{buildroot}/usr
-          
+
           %files
           /usr/bin/canvas
           /usr/share/*
-          
+
           %post
           update-desktop-database /usr/share/applications 2>/dev/null || true
           update-mime-database /usr/share/mime 2>/dev/null || true
@@ -165,7 +162,7 @@ jobs:
           cp rpmbuild/RPMS/x86_64/*.rpm . || true
 
       - name: Upload RPM artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: canvas-rpm
           path: "*.rpm"
@@ -178,108 +175,124 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install build dependencies
         run: |
-          pacman -Syu --noconfirm base-devel cmake ninja meson gcc pkgconf git \
+          pacman -Syu --noconfirm base-devel cmake ninja meson gcc pkgconf git ca-certificates \
             qt6-base qt6-svg ffmpeg pipewire alsa-lib nlohmann-json
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build project
         run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-          cmake --build . -j$(nproc)
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
 
-      - name: Create Arch PKGBUILD
+      - name: Package as archive
         run: |
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
-          VERSION=${VERSION#v}
-          
-          mkdir -p archbuild/pkg
-          
-          cat > archbuild/PKGBUILD <<'EOF'
-          pkgname=canvas
-          pkgver=${VERSION}
-          pkgrel=1
-          pkgdesc="Novara Canvas Studio - Nonlinear Video Editor"
-          arch=('x86_64')
-          url="https://github.com/Event-Horizon-desktop-environment/Novara-Canvas-Studio"
-          license=('MIT')
-          depends=('qt6-base' 'qt6-svg' 'ffmpeg' 'pipewire' 'alsa-lib')
-          
-          build() {
-            cd "$srcdir"
-            mkdir -p build
-            cd build
-            cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-            cmake --build . -j$(nproc)
-          }
-          
-          package() {
-            cd "$srcdir/build"
-            cmake --install . --prefix "$pkgdir/usr" --strip
-          }
-          EOF
-          
-          sed -i "s/\${VERSION}/$VERSION/" archbuild/PKGBUILD
-
-      - name: Build Arch package
-        run: |
-          cd archbuild
-          mkdir -p build
-          cp -r ../build build/
-          cd build
-          # Note: Full PKGBUILD build requires non-root, so we manually install
-          mkdir -p pkg/usr
-          ../../../build/gui/canvas 2>/dev/null || true  # Just copy binary if it exists
-          cd ..
-          # Create simple tarball with binary
-          tar -czf canvas-*.tar.gz PKGBUILD 2>/dev/null || true
+          mkdir -p archbuild
+          cp -a build archbuild/build
+          tar -czf "canvas-$(git describe --tags --always --dirty 2>/dev/null || echo 0.1.0)-arch.tar.gz" -C archbuild build
 
       - name: Upload Arch artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: canvas-arch
-          path: "archbuild/*.tar.gz"
+          path: "*.tar.gz"
+          if-no-files-found: ignore
+
+  build-appimage:
+    name: Build AppImage
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates git build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-svg-dev libqt6svg6-dev \
+            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev \
+            libpipewire-0.3-dev libasound2-dev nlohmann-json3-dev \
+            libva-dev libglvnd-dev libvulkan-dev wget desktop-file-utils
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build project
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Download linuxdeploy tooling
+        run: |
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage" -O /tmp/linuxdeploy.AppImage
+          chmod +x /tmp/linuxdeploy.AppImage
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage" -O /tmp/linuxdeploy-plugin-qt.AppImage
+          chmod +x /tmp/linuxdeploy-plugin-qt.AppImage
+
+      - name: Prepare AppDir
+        run: |
+          mkdir -p appdir/usr/bin appdir/usr/share/applications
+          install -m 0755 build/gui/canvas appdir/usr/bin/canvas
+          install -m 0644 packaging/canvas.desktop appdir/usr/share/applications/canvas.desktop
+
+      - name: Create AppImage
+        run: |
+          /tmp/linuxdeploy.AppImage --appimage-extract-and-run --appdir appdir --plugin qt --output appimage || \
+          /tmp/linuxdeploy.AppImage --appimage-extract-and-run --appdir appdir --output appimage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: canvas-appimage
+          path: "*.AppImage"
           if-no-files-found: ignore
 
   create-release:
     name: Create Release (Tags Only)
-    needs: [build-debian, build-fedora]
+    needs: [build-debian, build-fedora, build-appimage]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release-artifacts/**/*
           body: |
             # Novara Canvas Studio Release
-            
+
             ## Packages
             - **DEB** (Debian/Ubuntu): `canvas-*_amd64.deb`
             - **RPM** (Fedora/RHEL): `canvas-*.rpm`
-            
+            - **AppImage**: `canvas-*.AppImage`
+
             ## Installation
-            
+
             **Debian/Ubuntu:**
             ```bash
             sudo dpkg -i canvas-*_amd64.deb
-            sudo apt install -f  # Install missing dependencies if needed
+            sudo apt install -f
             ```
-            
+
             **Fedora/RHEL:**
             ```bash
             sudo dnf install canvas-*.rpm
+            ```
+
+            **AppImage:**
+            ```bash
+            chmod +x canvas-*.AppImage
+            ./canvas-*.AppImage
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
