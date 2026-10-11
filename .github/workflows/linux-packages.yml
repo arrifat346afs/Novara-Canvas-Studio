@@ -19,7 +19,7 @@ jobs:
       image: ubuntu:24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -86,7 +86,7 @@ jobs:
           mv canvas_*.deb canvas-$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")_amd64.deb || true
 
       - name: Upload DEB artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: canvas-deb
           path: "*.deb"
@@ -99,7 +99,7 @@ jobs:
       image: fedora:41
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -165,7 +165,7 @@ jobs:
           cp rpmbuild/RPMS/x86_64/*.rpm . || true
 
       - name: Upload RPM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: canvas-rpm
           path: "*.rpm"
@@ -178,7 +178,7 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -241,7 +241,7 @@ jobs:
           tar -czf canvas-*.tar.gz PKGBUILD 2>/dev/null || true
 
       - name: Upload Arch artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: canvas-arch
           path: "archbuild/*.tar.gz"
@@ -254,7 +254,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: release-artifacts
 
