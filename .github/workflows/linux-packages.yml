@@ -1,5 +1,5 @@
 name: Build Linux Packages
-
+# This workflow builds DEB, RPM, and Arch packages for the Novara Canvas Studio project.
 on:
   push:
     branches:
